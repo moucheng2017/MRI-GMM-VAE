@@ -1,0 +1,49 @@
+name: deep-mri-project-gaussian-stochastic-reconstruction
+
+debug:
+  True
+
+slice_index: 70
+
+mc_samples: 2
+
+dataset:
+  name: hpc
+  data_dir: '/home/moucheng/projects_data/HCP/103818_1'
+
+save_path: '/home/moucheng/projects/2023_03_09b_MICCAI_mri'
+
+model:
+  name: gmm
+  nparams: 5 # dim of the output of the encoder, meaning number of components of the encoded signals
+  samples: 5
+  k: 3
+  tau: 0.1
+  act: 'prelu'
+  mri: ball_stick
+  prior_std: 1.0
+
+train:
+  lr: 0.001
+  epochs_no: 280
+  stop_epoch: 1000
+  batch_size: 128
+  patience: 5
+  alpha: 0.0001
+  anneal_rate: 0.00001
+  warm_up: 0.2
+# 0.3*200 = 60
+# add a parameter to control to use relu or softplus on param
+
+checkpoint:
+  resume: False
+  checkpoint_path: '/some/path/to/saved/model'
+
+logger:
+  tag: 'debug'
+
+seed: 1024
+
+
+
+

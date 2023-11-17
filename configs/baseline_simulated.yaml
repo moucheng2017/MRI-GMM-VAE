@@ -3,8 +3,8 @@ name: deep-mri-project-baseline-l2-deterministic-reconstruction
 save_path: '/home/xmc/projects_results/mri'
 
 dataset:
-  # name: simulated
-  name: hpc
+  name: simulated
+  # name: hpc
   data_dir: '/home/xmc/projects_data/MRI/200109_1'
   # slice_index: 70
 

@@ -1,5 +1,5 @@
 # variational-mri-project
 
    ```shell
-   python main.py --config-file 'configs/baseline_brain.yaml' 
+   python train_simulated.py --config-file 'configs/baseline_simulated.yaml' 
    ```

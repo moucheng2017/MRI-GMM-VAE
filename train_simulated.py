@@ -8,8 +8,6 @@ import torch.optim as optim
 import torch.utils.data as utils
 from tqdm import tqdm
 import torch.nn.functional as F
-import math
-import nibabel as nib
 from arguments import get_args
 from libs.helpers import get_data, get_grad, img_infor, reshape_img, extract_slice, mask_img, norm_img
 from models.base import Net
@@ -17,8 +15,8 @@ from models.vae_gau import Net_VAE
 import scipy.ndimage as ndimage
 from libs.helpers import cart2sphere, sphere2cart
 from libs.helpers import direction_average
-
-from libs.mri_pysical_models import msdki
+import yaml
+from libs.mri_pysical_models import msdki, t2_adc
 from libs.mri_pysical_models import ball
 from libs.mri_pysical_models import ball_stick
 from libs.add_noise_simulation import add_noise
@@ -26,7 +24,38 @@ from libs.add_noise_simulation import add_noise
 from pathlib import Path
 
 
-def train(args):
+def main(args):
+    
+    if args.config_file:
+        config_file = args.config_file
+    else:
+        print("No config file specified")
+        
+    with open(config_file) as f:
+        train_params = yaml.full_load(f)
+        
+    # read the training parameters from config file:
+    prior_std = train_params['model']['prior_std']
+    model_ml = train_params['model']['name']
+    nparams = train_params['model']['nparams']
+    model_mri = train_params['model']['mri']
+    activation = train_params['model']['activation']
+    mc_samples = train_params['model']['mc_samples']
+    num_workers = train_params['train']['num_workers']
+    
+    lr = train_params['train']['lr']
+    epochs = train_params['train']['epochs_no']
+    batch = train_params['train']['batch_size']
+    alpha = train_params['train']['alpha']
+    anneal_rate = train_params['train']['anneal_rate']
+    warmup = train_params['train']['warmup']
+    
+    save_path = train_params['save_path']
+    slice_index = train_params['dataset']['slice_index']
+    seed = train_params['seed']
+    device = train_params['device']
+    data_path = train_params['dataset']['data_dir']
+    
     nvox = 1024
     nclus = 3
     # p = [0.1, 0.1, 0.2, 0.5]
@@ -38,7 +67,8 @@ def train(args):
     K = [1.25, 1.0, 0.0]
 
     mu = np.stack((D, K))
-    var = np.diag([args.model.prior_std, args.model.prior_std])
+    var = np.diag([prior_std, 
+                   prior_std])
     var = np.stack((var, var, var*0.2))
     # print(var.shape)
     # var = np.diag([0.001, 0.001])
@@ -50,20 +80,24 @@ def train(args):
 
     # params[params < 0] = 0.01
 
-    directory = '/home/moucheng/projects_data/HCP/103818_1'
-    bvals = np.loadtxt(directory + '/T1w/Diffusion/bvals')
+    # directory = '/home/moucheng/projects_data/HCP/103818_1'
+    bvals = np.loadtxt(data_path + '/T1w/Diffusion/bvals')
     bvals *= 1e-03
-    bvecs = np.loadtxt(directory + '/T1w/Diffusion/bvecs')
+    bvecs = np.loadtxt(data_path + '/T1w/Diffusion/bvecs')
     bvecs = np.transpose(bvecs)
     grad = np.concatenate((bvecs, bvals[:, None]), axis=1)
 
     tor_params = torch.from_numpy(params)
     tor_grad = torch.from_numpy(grad)
     tor_grad = tor_grad.to(torch.float32)
-    if args.model.mri == 'msdki':
+    if model_mri == 'msdki':
         S = msdki(tor_grad, tor_params)
-    # elif args.model.mri == 't2adc':
-        # S = t2adc(tor_grad, tor_params)
+    elif args.model.mri == 'ball_stick':
+        S = ball_stick(tor_grad, tor_params)
+    elif args.model.mri == 'ball':
+        S = ball(tor_grad, tor_params)
+    elif args.model.mri == 't2_adc':
+        S = t2_adc(tor_grad, tor_params)
     else:
         raise NotImplementedError
     S = S.to(torch.float32)
@@ -71,46 +105,50 @@ def train(args):
     b_values_no0 = torch.FloatTensor(bvals)
     gradient_directions_no0 = torch.FloatTensor(bvecs)
 
-    if args.model.name == 'mlp':
-        net = Net(gradient_directions_no0, b_values_no0, grad, args.model.nparams, args.model.mri)
+    if model_ml == 'mlp':
+        net = Net(gradient_directions_no0, 
+                  b_values_no0, 
+                  grad, 
+                  nparams, 
+                  model_mri).to(device)
 
-        model_save_path = args.save_path + '/models_simulated_data/' + args.model.name
+        model_save_path = save_path + '/models_simulated_data/' + model_ml
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
-        model_name = args.model.name + \
-                     '_par_' + str(args.model.nparams) + \
-                     '_mri_' + str(args.model.mri) + \
-                     '_std_' + str(args.model.prior_std) + \
-                     '_lr_' + str(args.train.lr) + \
-                     '_epoch_' + str(args.train.epochs_no)
+        model_name = model_ml + \
+                     '_par_' + str(nparams) + \
+                     '_mri_' + str(model_mri) + \
+                     '_std_' + str(prior_std) + \
+                     '_lr_' + str(lr) + \
+                     '_epoch_' + str(epochs)
 
         model_save_path = model_save_path + '/' + model_name
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
-    elif args.model.name == 'gaussian':
+    elif model_ml == 'gaussian':
         net = Net_VAE(gradient_directions_no0=gradient_directions_no0,
                       b_values_no0=b_values_no0,
                       grad=grad,
-                      nparams=args.model.nparams,
-                      samples=args.model.samples,
-                      mri_model=args.model.mri,
-                      prior_std=args.model.prior_std,
-                      act=args.model.act)
+                      nparams=nparams,
+                      samples=mc_samples,
+                      mri_model=model_mri,
+                      prior_std=prior_std,
+                      act=activation).to(device)
 
-        model_save_path = args.save_path + '/models_simulated_data/' + args.model.name
+        model_save_path = save_path + '/models_simulated_data/' + model_ml
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
-        model_name = args.model.name + \
-                     '_dim_' + str(args.model.samples) + \
-                     '_par_' + str(args.model.nparams) + \
-                     '_mri_' + str(args.model.mri) + \
-                     '_std_' + str(args.model.prior_std) + \
-                     '_lr_' + str(args.train.lr) + \
-                     '_epoch_' + str(args.train.epochs_no) + \
-                     '_alpha_' + str(args.train.alpha) + \
-                     '_anneal_' + str(args.train.anneal_rate) + \
-                     '_act_' + str(args.model.act) + \
-                     '_warm_' + str(args.train.warm_up)
+        model_name = model_ml + \
+                     '_dim_' + str(mc_samples) + \
+                     '_par_' + str(nparams) + \
+                     '_mri_' + str(model_mri) + \
+                     '_std_' + str(prior_std) + \
+                     '_lr_' + str(lr) + \
+                     '_epoch_' + str(epochs) + \
+                     '_alpha_' + str(alpha) + \
+                     '_anneal_' + str(anneal_rate) + \
+                     '_act_' + str(activation) + \
+                     '_warm_' + str(warmup)
 
         model_save_path = model_save_path + '/' + model_name
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
@@ -119,15 +157,15 @@ def train(args):
         raise NotImplementedError
 
     criterion = nn.MSELoss(reduction='mean')
-    optimizer = optim.Adam(net.parameters(), lr=args.train.lr)
+    optimizer = optim.Adam(net.parameters(), lr=lr)
     trainloader = utils.DataLoader(S,
-                                   batch_size=128,
+                                   batch_size=batch,
                                    shuffle=True,
-                                   num_workers=2,
+                                   num_workers=num_workers,
                                    drop_last=True)
 
     net.train()
-    for epoch in range(args.train.epochs_no):
+    for epoch in range(epochs):
         print("-----------------------------------------------------------------")
         print("Epoch: {}".format(epoch))
 
@@ -139,11 +177,11 @@ def train(args):
         for i, X_batch in enumerate(tqdm(trainloader), 0):
 
             optimizer.zero_grad()
-            if args.model.name == 'mlp':
+            if model_ml == 'mlp':
                 outputs = net(X_batch)
                 loss = criterion(outputs['signal'], X_batch)
 
-            elif args.model.name == 'gaussian':
+            elif model_ml == 'gaussian':
                 # X_pred, D_par_pred, D_iso_pred, mu_pred, Fp_pred, mu, log_var, consistency_loss = net(X_batch)
                 outputs = net(X_batch)
                 loss = criterion(outputs['signal'], X_batch)
@@ -151,13 +189,13 @@ def train(args):
                 kl_loss = torch.mean(-0.5 * torch.sum(1 + outputs['log_var'] - outputs['mu'] ** 2 - outputs['log_var'].exp(), dim=1), dim=0)
 
                 # annealing schedule of kl loss
-                if epoch < args.train.warm_up*args.train.epochs_no:
-                    alpha = 0.0
+                if epoch < warmup*epochs:
+                    alpha_ = 0.0
                 else:
-                    alpha = args.train.anneal_rate*(epoch - args.train.warm_up*args.train.epochs_no)
-                    alpha = min(alpha, args.train.alpha)
+                    alpha_ = anneal_rate*(epoch - warmup*epochs)
+                    alpha_ = min(alpha_, alpha)
 
-                loss += kl_loss*alpha
+                loss += kl_loss*alpha_
 
                 running_loss_kl += kl_loss.item()
                 running_loss_kl_scaled += alpha*kl_loss.item()
@@ -169,9 +207,9 @@ def train(args):
             optimizer.step()
             running_loss += loss.item()
 
-        if args.model.name == 'mlp':
+        if model_ml == 'mlp':
             print("Loss: {}".format(running_loss))
-        elif args.model.name == 'gaussian':
+        elif model_ml == 'gaussian':
             print("L2 Loss: {}".format(running_loss_l2))
             print("KL Loss: {}".format(running_loss_kl))
             print("Scaled KL Loss: {}".format(running_loss_kl_scaled))
@@ -253,6 +291,13 @@ def train(args):
 
 
 if __name__ == "__main__":
-    args = get_args()
-    trained_model = train(args=args)
+    parser = argparse.ArgumentParser(description="Train a simulated MRI model with PyTorch.")
+    parser.add_argument(
+        "--config-file",
+        type=str,
+        default=None,
+        help="Path to config file to use for training",
+    )
+    args = parser.parse_args()
+    main(args)
 

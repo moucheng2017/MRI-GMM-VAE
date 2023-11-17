@@ -1,38 +1,43 @@
 name: deep-mri-project-baseline-l2-deterministic-reconstruction
 
-debug:
-  True
-
-slice_index: 70
-
-mc_samples: 2
-
-save_path: '/home/moucheng/projects/2023_03_09b_MICCAI_mri'
+save_path: '/home/xmc/projects_results/mri'
 
 dataset:
-  name: simulated
-#  num_workers: 0 # default 0 because we do not use large batch size with 3D model and volumes anyways
-  data_dir: '/home/moucheng/projects_data/HCP/103818_1'
+  # name: simulated
+  name: hpc
+  data_dir: '/home/xmc/projects_data/MRI/200109_1'
+  # slice_index: 70
 
 model:
-  name: mlp
+  name: gaussian
   nparams: 2 # dim of the output of the encoder, meaning number of components of the encoded signals
   mri: msdki
   prior_std: 0.015
+  activation: relu
+  mc_samples: 2
+  samples: 256
+  clusters: 2
+  tau: 2.0
 
 train:
   lr: 0.001
   epochs_no: 200
   batch_size: 128
+  num_workers: 4
+  alpha: 0.001
+  anneal_rate: 0.999
+  warmup: 0.1
 
-checkpoint:
-  resume: False
-  checkpoint_path: '/some/path/to/saved/model'
+# checkpoint:
+#   resume: False
+#   checkpoint_path: '/some/path/to/saved/model'
 
 logger:
   tag: 'debug'
 
 seed: 1024
+
+device: 'cpu'
 
 
 

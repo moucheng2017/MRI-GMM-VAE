@@ -1,4 +1,4 @@
-### Variational Mapping of MRI:
+### (Under construction, only simulations available for now) Variational Mapping of MRI:
 We introduce and demonstrate a new paradigm for quantitative parameter mapping in MRI.
 Parameter mapping techniques, such as diffusion MRI (dMRI) and quantitative MRI (qMRI), have the potential to robustly and repeatably measure biologically-relevant tissue maps that strongly relate to underlying microstructure.
 Quantitative maps are calculated by fitting a model to multiple images, e.g. with least-squares or machine learning. However, the overwhelming majority of model fitting techniques assume that each voxel is independent, ignoring any co-dependencies in the data. This makes model fitting sensitive to voxelwise measurement noise,  hampering reliability and repeatability.

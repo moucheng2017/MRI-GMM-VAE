@@ -6,28 +6,49 @@ We propose a self-supervised deep variational autoencoder  model fitting approac
 We demonstrate that our approach outperforms current model fitting techniques in dMRI simulations and real data.
 Our approach enables improved quantitative maps and/or reduced acquisition times, and can hence support the clinical adoption of parameter mapping methods such as dMRI and qMRI.
 
-
 [To do] Refactorizing the code for the real MRI data.
 
 ### Installation:
 ```shell
-conda create --name myenv \
-
-conda activate myenv \
-
-conda install --file requirement.txt
+conda env create -f requirements.yaml
+conda activate deep_mri
 ```
 
-### Simulated Experiments:
-
+### Download HCP Data:
+1. Apply for access first: https://www.humanconnectome.org/study/hcp-young-adult/data-use-terms 
+2. After your access request is granted:
 ```shell
-python train_simulated.py --config-file 'configs/baseline_simulated.yaml' 
+cd ..
+mkdir data
+cd data
+gdown --folder https://drive.google.com/drive/folders/1HulbCuPAm4SltZN_iP83W8StaSQoirX3?usp=sharing
+gdown --folder https://drive.google.com/drive/folders/1h7I8-ezSMMGNovkGsD2Ou7c6MI2tBypD?usp=sharing
 ```
 
-### Results:
+### Running experiments:
+```shell
+python train_simulated.py --config 'configs/baseline_simulated.yaml' 
+```
 
+### Model architectures:
+<br>
+ <img height="250" src="figures/gmm_vae.png" />
+</br>
+
+
+### Results on simulated data:
+<br>
+ <img height="700" src="figures/simulated_results.png" />
+</br>
+
+### Results on real data (HCP):
 The visual results of the proposed methods (VAE-UniG and VAE-GMM) vs the non-dl and self-supervised baseline. Our methods can discover more anatomical structures as highlighted in the zoomed in areas.
 
 <br>
  <img height="500" src="figures/visual_results_zoom.png" />
+</br>
+
+### Visulisation of learnt posteriors:
+<br>
+ <img height="500" src="figures/latent_visual.png" />
 </br>

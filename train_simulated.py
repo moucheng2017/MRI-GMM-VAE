@@ -1,5 +1,4 @@
 import argparse
-import os
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
@@ -7,27 +6,21 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as utils
 from tqdm import tqdm
-import torch.nn.functional as F
-from arguments import get_args
-from libs.helpers import get_data, get_grad, img_infor, reshape_img, extract_slice, mask_img, norm_img
-from models.base import Net
-from models.vae_gau import Net_VAE
-import scipy.ndimage as ndimage
-from libs.helpers import cart2sphere, sphere2cart
-from libs.helpers import direction_average
+from models.baseline import Net
+from models.vae import Net_VAE
+from models.vae_gmm import Net_GMM
 import yaml
-from libs.mri_pysical_models import msdki, t2_adc
-from libs.mri_pysical_models import ball
-from libs.mri_pysical_models import ball_stick
-from libs.add_noise_simulation import add_noise
-
+import torch.nn.functional as F
+from models.mri_pysical_models import msdki, t2_adc
+from models.mri_pysical_models import ball
+from models.mri_pysical_models import ball_stick
 from pathlib import Path
 
 
 def main(args):
     
-    if args.config_file:
-        config_file = args.config_file
+    if args.config:
+        config_file = args.config
     else:
         print("No config file specified")
         
@@ -39,9 +32,8 @@ def main(args):
     model_ml = train_params['model']['name']
     nparams = train_params['model']['nparams']
     model_mri = train_params['model']['mri']
-    activation = train_params['model']['activation']
-    mc_samples = train_params['model']['mc_samples']
     num_workers = train_params['train']['num_workers']
+    latent_dim = train_params['model']['latent_dim']
     
     lr = train_params['train']['lr']
     epochs = train_params['train']['epochs_no']
@@ -51,10 +43,9 @@ def main(args):
     warmup = train_params['train']['warmup']
     
     save_path = train_params['save_path']
-    slice_index = train_params['dataset']['slice_index']
-    seed = train_params['seed']
-    device = train_params['device']
+    # seed = train_params['seed']
     data_path = train_params['dataset']['data_dir']
+    k = train_params['model']['k']
     
     nvox = 1024
     nclus = 3
@@ -110,7 +101,7 @@ def main(args):
                   b_values_no0, 
                   grad, 
                   nparams, 
-                  model_mri).to(device)
+                  model_mri)
 
         model_save_path = save_path + '/models_simulated_data/' + model_ml
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
@@ -125,21 +116,20 @@ def main(args):
         model_save_path = model_save_path + '/' + model_name
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
-    elif model_ml == 'gaussian':
+    elif model_ml == 'vae':
         net = Net_VAE(gradient_directions_no0=gradient_directions_no0,
                       b_values_no0=b_values_no0,
                       grad=grad,
                       nparams=nparams,
-                      samples=mc_samples,
+                      latent_dim=latent_dim,
                       mri_model=model_mri,
-                      prior_std=prior_std,
-                      act=activation).to(device)
+                      prior_std=prior_std)
 
         model_save_path = save_path + '/models_simulated_data/' + model_ml
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
         model_name = model_ml + \
-                     '_dim_' + str(mc_samples) + \
+                     '_dim_' + str(latent_dim) + \
                      '_par_' + str(nparams) + \
                      '_mri_' + str(model_mri) + \
                      '_std_' + str(prior_std) + \
@@ -147,7 +137,34 @@ def main(args):
                      '_epoch_' + str(epochs) + \
                      '_alpha_' + str(alpha) + \
                      '_anneal_' + str(anneal_rate) + \
-                     '_act_' + str(activation) + \
+                     '_warm_' + str(warmup)
+
+        model_save_path = model_save_path + '/' + model_name
+        Path(model_save_path).mkdir(parents=True, exist_ok=True)
+    
+    elif model_ml == 'gm_vae':
+        net = Net_GMM(gradient_directions_no0=gradient_directions_no0,
+                      b_values_no0=b_values_no0,
+                      grad=grad,
+                      nparams=nparams,
+                      latent_dim=latent_dim,
+                      mri_model=model_mri,
+                      k=k,
+                      prior_std=prior_std)
+
+        model_save_path = save_path + '/models_simulated_data/' + model_ml
+        Path(model_save_path).mkdir(parents=True, exist_ok=True)
+
+        model_name = model_ml + \
+                     '_dim_' + str(latent_dim) + \
+                     '_par_' + str(nparams) + \
+                     '_mri_' + str(model_mri) + \
+                     '_k_' + str(k) + \
+                     '_std_' + str(prior_std) + \
+                     '_lr_' + str(lr) + \
+                     '_epoch_' + str(epochs) + \
+                     '_alpha_' + str(alpha) + \
+                     '_anneal_' + str(anneal_rate) + \
                      '_warm_' + str(warmup)
 
         model_save_path = model_save_path + '/' + model_name
@@ -173,6 +190,8 @@ def main(args):
         running_loss_l2 = 0.
         running_loss_kl = 0.
         running_loss_kl_scaled = 0.
+        running_loss_kl2 = 0.
+        running_loss_kl_scaled2 = 0.
 
         for i, X_batch in enumerate(tqdm(trainloader), 0):
 
@@ -181,7 +200,7 @@ def main(args):
                 outputs = net(X_batch)
                 loss = criterion(outputs['signal'], X_batch)
 
-            elif model_ml == 'gaussian':
+            elif model_ml == 'vae':
                 # X_pred, D_par_pred, D_iso_pred, mu_pred, Fp_pred, mu, log_var, consistency_loss = net(X_batch)
                 outputs = net(X_batch)
                 loss = criterion(outputs['signal'], X_batch)
@@ -189,16 +208,46 @@ def main(args):
                 kl_loss = torch.mean(-0.5 * torch.sum(1 + outputs['log_var'] - outputs['mu'] ** 2 - outputs['log_var'].exp(), dim=1), dim=0)
 
                 # annealing schedule of kl loss
-                if epoch < warmup*epochs:
+                if epoch < 0.1*epochs:
                     alpha_ = 0.0
                 else:
-                    alpha_ = anneal_rate*(epoch - warmup*epochs)
+                    alpha_ = anneal_rate*(0.99*epochs)
                     alpha_ = min(alpha_, alpha)
 
                 loss += kl_loss*alpha_
 
                 running_loss_kl += kl_loss.item()
                 running_loss_kl_scaled += alpha*kl_loss.item()
+
+            elif model_ml == 'gm_vae':
+                outputs = net(X_batch)
+                loss = criterion(outputs['signal'], X_batch)
+                running_loss_l2 += loss.item()
+                kl_loss = torch.mean(-0.5 * torch.sum(1 + outputs['log_var'] - outputs['mu'] ** 2 - outputs['log_var'].exp(), dim=1), dim=0)
+
+                qy = F.softmax(outputs['y_logits'], dim=-1)
+                log_q = F.log_softmax(outputs['y_logits'], dim=-1)
+
+                k = outputs['y_logits'].size(-1)  # Number of categories
+                target = torch.full_like(qy, 1 / k)  # Shape-matched uniform distribution
+
+                # Compute KL divergence
+                kl_loss2 = torch.mean(torch.sum(qy * (log_q - torch.log(target)), dim=-1))
+
+                # annealing schedule of kl loss
+                if epoch < 0.1*epochs:
+                    alpha_ = 0.0
+                else:
+                    alpha_ = anneal_rate*(0.99*epochs)
+                    alpha_ = min(alpha, alpha_)
+
+                loss += kl_loss*alpha_ + kl_loss2*alpha_
+
+                running_loss_kl += kl_loss.item()
+                running_loss_kl_scaled += alpha_*kl_loss.item()
+
+                running_loss_kl2 += kl_loss2.item()
+                running_loss_kl_scaled2 += alpha_*kl_loss2.item()
 
             else:
                 raise NotImplementedError
@@ -209,10 +258,16 @@ def main(args):
 
         if model_ml == 'mlp':
             print("Loss: {}".format(running_loss))
-        elif model_ml == 'gaussian':
+        elif model_ml == 'vae':
             print("L2 Loss: {}".format(running_loss_l2))
             print("KL Loss: {}".format(running_loss_kl))
             print("Scaled KL Loss: {}".format(running_loss_kl_scaled))
+        elif model_ml == 'gm_vae':
+            print("L2 Loss: {}".format(running_loss_l2))
+            print("KL Loss: {}".format(running_loss_kl))
+            print("Scaled KL Loss: {}".format(running_loss_kl_scaled))
+            print("KL Loss2: {}".format(running_loss_kl2))
+            print("Scaled KL Loss2: {}".format(running_loss_kl_scaled2))    
         else:
             raise NotImplementedError
 
@@ -228,25 +283,8 @@ def main(args):
     # signal_pred = X_pred['signal'].numpy()
     params_pred = X_pred['params'].numpy()
 
-    # fig, ax = plt.subplots(1, 2, figsize=(10, 5))
-    # for i in range(0, nclus):
-    #     ax[0].plot(params[clusters == i, 0], params_pred[clusters == i, 0], 'o', markersize=1)
-    #     ax[1].plot(params[clusters == i, 1], params_pred[clusters == i, 1], 'o', markersize=1)
-    # plt.tight_layout()
-    # plt.subplots_adjust(top=0.85)
-    # plt.show()
-
-    # fig = plt.subplots(1, 2, figsize=(10, 5))
-    # plt.plot(grad[:, 3], signal_pred[1, :], 'o')
-    # plt.plot(grad[:, 3], S[1, :], 'x')
-
-    # plt.tight_layout()
-    # plt.subplots_adjust(top=0.85)
-    # plt.show()
-
     plt.figure()
     MSEs = []
-    MAEs = []
     MSEs_std = []
     for i in range(0, nclus):
         plt.plot(params[clusters == i, 1], params_pred[clusters == i, 1], 'x', markersize=1)
@@ -264,7 +302,7 @@ def main(args):
 
     plt.xlabel('GT of Kurtosis')
     plt.ylabel('Pred of Kurtosis')
-    plt.legend(['cluster 1', 'cluster 2', 'cluster 3'])
+    plt.legend(['cluster 1', 'cluster 2', 'cluster 3'], fontsize=10)
     fig_save_name = model_save_path + '/k.png'
     plt.savefig(fig_save_name, bbox_inches='tight')
 
@@ -285,7 +323,7 @@ def main(args):
 
     plt.xlabel('GT of Diffusivity')
     plt.ylabel('Pred of Diffusivity')
-    plt.legend(['cluster 1', 'cluster 2', 'cluster 3'], fontsize=5)
+    plt.legend(['cluster 1', 'cluster 2', 'cluster 3'], fontsize=10)
     fig_save_name = model_save_path + '/d.png'
     plt.savefig(fig_save_name, bbox_inches='tight')
 
@@ -293,7 +331,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a simulated MRI model with PyTorch.")
     parser.add_argument(
-        "--config-file",
+        "--config",
         type=str,
         default=None,
         help="Path to config file to use for training",

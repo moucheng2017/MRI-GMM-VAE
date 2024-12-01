@@ -1,0 +1,33 @@
+name: deep-mri-project-baseline-l2-deterministic-reconstruction
+save_path: '../results/deep_mri'
+
+dataset:
+  name: simulated
+  data_dir: '../data/200109_1'
+
+model:
+  name: gm_vae
+  nparams: 2 # dim of the output of the encoder, meaning number of components of the encoded signals
+  mri: msdki
+  prior_std: 0.015
+  latent_dim: 256
+  mc_samples: 2
+  samples: 256
+  clusters: 2
+  tau: 2.0
+  k: 4
+
+train:
+  lr: 0.001
+  epochs_no: 100
+  batch_size: 128
+  num_workers: 4
+  alpha: 0.001
+  anneal_rate: 0.999
+  warmup: 0.1
+  seed: 42
+
+
+
+
+

@@ -4,6 +4,7 @@
 .idea
 __pycache__/
 *.py[cod]
+models/__pycache__/
 
 # Ignore all wandb file:
 wandb/

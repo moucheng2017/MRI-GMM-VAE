@@ -20,18 +20,14 @@ class MRIDataset(utils.Dataset):
 
         self.img = get_data(mri_dir)['img']
         self.mask = get_data(mri_dir)['mask']
-        self.imgvox, self.masktmp, self.nvoxtotal, self.nvol = img_mask(img=self.img, 
-                                                                        mask=self.mask)
 
     def __getitem__(self, index):
-        X = extract_slice(imgvox=self.imgvox,
+        X = extract_slice(img=self.img,
                           mask=self.mask, 
-                          nvoxtotal=self.nvoxtotal,
                           no=index)
         
         X = img_norm(imgvoxtofit=X,
-                     bvals=self.bvals,
-                     nvol=self.nvol)
+                     bvals=self.bvals)
         
         return torch.from_numpy(X.astype(np.float32))
 
@@ -62,39 +58,33 @@ def get_data(datadir):
     # get b values and b vectors:
     bvals = np.loadtxt(os.path.join(datadir, 'T1w', 'Diffusion', 'bvals'))
     bvecs = np.loadtxt(os.path.join(datadir,'T1w', 'Diffusion', 'bvecs'))
-    bvals = bvals * 1e-03
-    bvecs = np.transpose(bvecs)
-    grad = np.concatenate((bvecs, bvals[:,None]), axis=1)
-    # get images and masks:
-    # /home/mouchengxu/Documents/projects/deep_mri/code/data/103818_1/T1w/T1w_acpc_dc_restore_1.25.nii.gz
+    bvals = bvals * 1e-03 # 288
+    bvecs = np.transpose(bvecs) # 288 x 3
+    grad = np.concatenate((bvecs, bvals[:,None]), axis=1) # 288 x 4
+    # get images and brain masks:
     img = nib.load(os.path.join(datadir, 'T1w/T1w_acpc_dc_restore_1.25.nii.gz'))
     mask = nib.load(os.path.join(datadir, 'T1w/Diffusion/nodif_brain_mask.nii.gz'))
-    img = img.get_fdata()
-    mask = mask.get_fdata()
+    img = img.get_fdata() # 145 x 174 x 145: height x slices x width
+    mask = mask.get_fdata() # 145 x 174 x 145: height x slices x width
+
     return {'bvals': bvals,
             'bvecs': bvecs,
             'grad': grad,
             'img': img,
             'mask': mask}
 
-def img_mask(img,
-             mask):
-    nvoxtotal = np.prod(np.shape(img)[0:3])
-    nvol = np.shape(img)[2]
-    imgvox = np.reshape(img, (nvoxtotal, nvol))
-    masktmp = np.zeros(np.shape(mask))
-    return imgvox, masktmp, nvoxtotal, nvol
-
-def extract_slice(imgvox,
+def extract_slice(img,
                   mask, 
                   nvoxtotal,
                   no):
-    
+    masktmp = np.zeros(np.shape(mask))
+
+    img = img[mask == 1]
     masktmp = np.zeros(np.shape(mask))
     masktmp[:, :, no] = mask[:, :, no]
     mask = masktmp
     maskvox = np.reshape(mask, (nvoxtotal))
-    imgvoxtofit = imgvox[maskvox == 1]
+    imgvoxtofit = img[maskvox == 1]
     return imgvoxtofit
 
 def img_norm(imgvoxtofit,

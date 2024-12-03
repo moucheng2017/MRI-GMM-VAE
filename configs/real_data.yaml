@@ -7,7 +7,7 @@ dataset:
 save_path: '../results/deep_mri'
 
 model:
-  name: gm_vae
+  name: mlp
   nparams: 2 # dim of the output of the encoder, meaning number of components of the encoded signals
   mri: msdki
   prior_std: 0.015

@@ -24,7 +24,7 @@ class Net(nn.Module):
         self.gradient_directions_no0 = gradient_directions_no0
         self.b_values_no0 = b_values_no0
         self.fc_layers = nn.ModuleList()
-        for i in range(5):  # 3 fully connected hidden layers
+        for i in range(3):  # 3 fully connected hidden layers
             self.fc_layers.extend([nn.Linear(len(b_values_no0), len(b_values_no0)), nn.PReLU()])
         self.encoder = nn.Sequential(*self.fc_layers, nn.Linear(len(b_values_no0), nparams))
 

@@ -59,13 +59,7 @@ def main(args):
     grad = torch.FloatTensor(trainloader.grad)
 
     if model_ml == 'mlp':
-        if dataset == 'placenta':
-            net = Net(gradient_directions_no0, b_values_no0, grad, nparams, model_mri)
-        elif dataset == 'hpc':
-            net = Net(gradient_directions_no0, b_values_no0, grad, nparams, model_mri)
-        else:
-            raise NotImplementedError
-
+        net = Net(gradient_directions_no0, b_values_no0, grad, nparams, model_mri)
         model_save_path = args.save_path + '/models_' + dataset + '/' + model_ml + '/' + model_mri
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
@@ -79,29 +73,13 @@ def main(args):
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
     elif model_ml == 'gaussian':
-        if dataset == 'placenta':
-            net = Net_VAE(gradient_directions_no0=gradient_directions_no0,
-                          b_values_no0=b_values_no0,
-                          grad=grad,
-                          act=activation,
-                          nparams=nparams,
-                          samples=samples,
-                          mri_model=model_mri,
-                          prior_std=prior_std
-                          )
-
-        elif dataset == 'hpc':
-            net = Net_VAE(gradient_directions_no0=gradient_directions_no0,
-                          b_values_no0=b_values_no0,
-                          grad=grad,
-                          act=activation,
-                          nparams=nparams,
-                          samples=samples,
-                          mri_model=model_mri,
-                          prior_std=prior_std)
-
-        else:
-            raise NotImplementedError
+        net = Net_VAE(gradient_directions_no0=gradient_directions_no0,
+                        b_values_no0=b_values_no0,
+                        grad=grad,
+                        nparams=nparams,
+                        samples=samples,
+                        mri_model=model_mri,
+                        prior_std=prior_std)
 
         model_save_path = save_path + '/models_' + dataset + '/' + model_ml
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
@@ -115,40 +93,21 @@ def main(args):
                      '_epoch_' + str(epochs) + \
                      '_alpha_' + str(alpha) + \
                      '_anneal_' + str(anneal_rate) + \
-                     '_act_' + str(activation) + \
                      '_warm_' + str(warmup)
 
         model_save_path = model_save_path + '/' + model_name
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
     elif model_ml == 'gmm':
-        if dataset == 'placenta':
-            net = Net_GMM(gradient_directions_no0=gradient_directions_no0,
-                          b_values_no0=b_values_no0,
-                          grad=grad,
-                          act=activation,
-                          k=k,
-                          tau=tau,
-                          nparams=nparams,
-                          samples=samples,
-                          mri_model=model_mri,
-                          prior_std=prior_std
-                          )
-
-        elif dataset == 'hpc':
-            net = Net_GMM(gradient_directions_no0=gradient_directions_no0,
-                          b_values_no0=b_values_no0,
-                          grad=grad,
-                          k=k,
-                          tau=tau,
-                          act=activation,
-                          nparams=nparams,
-                          samples=samples,
-                          mri_model=model_mri,
-                          prior_std=prior_std)
-
-        else:
-            raise NotImplementedError
+        net = Net_GMM(gradient_directions_no0=gradient_directions_no0,
+                        b_values_no0=b_values_no0,
+                        grad=grad,
+                        k=k,
+                        tau=tau,
+                        nparams=nparams,
+                        samples=samples,
+                        mri_model=model_mri,
+                        prior_std=prior_std)
 
         model_save_path = save_path + '/models_' + dataset + '/' + model_ml
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
@@ -164,7 +123,6 @@ def main(args):
                      '_epoch_' + str(epochs) + \
                      '_alpha_' + str(alpha) + \
                      '_anneal_' + str(anneal_rate) + \
-                     '_act_' + str(activation) + \
                      '_warm_' + str(warmup)
 
         model_save_path = model_save_path + '/' + model_name
@@ -175,9 +133,6 @@ def main(args):
 
     criterion = nn.MSELoss(reduction='mean')
     optimizer = optim.Adam(net.parameters(), lr=lr)
-
-    # num_bad_epochs = 0
-    # best = 1e-16
 
     best_l2 = 100.
 

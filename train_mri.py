@@ -54,13 +54,13 @@ def main(args):
                                               shuffle=True, 
                                               num_workers=num_workers)
 
-    b_values_no0 = torch.FloatTensor(trainloader.bvals)
-    gradient_directions_no0 = torch.FloatTensor(trainloader.bvecs)
-    grad = torch.FloatTensor(trainloader.grad)
+    b_values_no0 = torch.FloatTensor(dataset.bvals).to('cuda')
+    gradient_directions_no0 = torch.FloatTensor(dataset.bvecs).to('cuda')
+    grad = torch.FloatTensor(dataset.grad).to('cuda')
 
     if model_ml == 'mlp':
-        net = Net(gradient_directions_no0, b_values_no0, grad, nparams, model_mri)
-        model_save_path = args.save_path + '/models_' + dataset + '/' + model_ml + '/' + model_mri
+        net = Net(gradient_directions_no0, b_values_no0, grad, nparams, model_mri).to('cuda')
+        model_save_path = save_path + '/' + model_ml + '/' + model_mri
         Path(model_save_path).mkdir(parents=True, exist_ok=True)
 
         model_name = model_ml + \
@@ -132,7 +132,7 @@ def main(args):
         raise NotImplementedError
 
     criterion = nn.MSELoss(reduction='mean')
-    optimizer = optim.Adam(net.parameters(), lr=lr)
+    optimizer = optim.Adam(net.parameters(), lr=lr).to('cuda')
 
     best_l2 = 100.
 

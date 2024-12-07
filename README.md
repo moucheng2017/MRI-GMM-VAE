@@ -1,10 +1,20 @@
 ### (Under construction, only simulations available for now) Variational Mapping of MRI:
-We introduce and demonstrate a new paradigm for quantitative parameter mapping in MRI.
-Parameter mapping techniques, such as diffusion MRI (dMRI) and quantitative MRI (qMRI), have the potential to robustly and repeatably measure biologically-relevant tissue maps that strongly relate to underlying microstructure.
-Quantitative maps are calculated by fitting a model to multiple images, e.g. with least-squares or machine learning. However, the overwhelming majority of model fitting techniques assume that each voxel is independent, ignoring any co-dependencies in the data. This makes model fitting sensitive to voxelwise measurement noise,  hampering reliability and repeatability.
-We propose a self-supervised deep variational autoencoder  model fitting approach that breaks the assumption of independent pixels, leveraging redundancies in the data to effectively perform data-driven regularisation of quantitative maps.  
-We demonstrate that our approach outperforms current model fitting techniques in dMRI simulations and real data.
-Our approach enables improved quantitative maps and/or reduced acquisition times, and can hence support the clinical adoption of parameter mapping methods such as dMRI and qMRI.
+We introduce and demonstrate a new paradigm for quantitative parameter mapping
+in MRI. Parameter mapping techniques, such as diffusion MRI and quantitative
+MRI, have the potential to robustly and repeatably measure biologically-relevant
+tissue maps that strongly relate to underlying microstructure. Quantitative maps
+are calculated by fitting a model to multiple images, e.g. with least-squares or
+deep learning. However, the overwhelming majority of model fitting techniques
+assume that each voxel is independent, ignoring any co-dependencies in the data.
+This makes model fitting sensitive to voxelwise measurement noise, hampering
+reliability and repeatability. We propose a self-supervised deep variational approach
+that breaks the assumption of independent pixels, leveraging redundancies in the
+data to effectively perform data-driven regularisation of quantitative maps. We
+demonstrate that our approach outperforms current model fitting techniques in
+dMRI simulations and real data. Especially with a Gaussian mixture prior, our
+model enables sharper quantitative maps, revealing finer anatomical details that
+are not presented in the baselines. Our approach can hence support the clinical
+adoption of parameter mapping methods such as dMRI and qMRI.
 
 [To do] Refactorizing the code for the real MRI data.
 

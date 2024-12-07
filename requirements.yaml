@@ -1,0 +1,16 @@
+name: deep_mri  # Replace with your desired environment name
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.12.2
+  - python_abi=3.12
+  - numpy=1.26.4
+  - numpy-base=1.26.4
+  - matplotlib=3.9.2
+  - matplotlib-base=3.9.2
+  - pytorch-cpu=2.4.1
+  - nibabel=5.3.2
+  - tqdm=4.66.5
+  - scipy=1.14.1
+  - pyyaml=6.0.2

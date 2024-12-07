@@ -7,7 +7,7 @@ import torch.optim as optim
 import torch.utils.data as utils
 from tqdm import tqdm
 import torch.nn.functional as F
-from libs.mri_pysical_models import t2_adc, msdki
+from models.mri_pysical_models import t2_adc, msdki
 
 
 class Net_GMM(nn.Module):
@@ -17,12 +17,12 @@ class Net_GMM(nn.Module):
     def __init__(self,
                  gradient_directions_no0,
                  b_values_no0,
-                 act,
+                 act='relu',
                  grad=None,
                  nparams=5,
                  k = 5,
                  tau=1,
-                 samples=256,
+                 latent_dim=256,
                  prior_std=1.,
                  mri_model='ball_stick'):
 
@@ -32,7 +32,7 @@ class Net_GMM(nn.Module):
         self.temp = tau
         self.grad = grad
         self.prior_std = prior_std
-        self.sample_no = samples
+        self.latent_dim = latent_dim
         self.mri_model = mri_model
         self.gradient_directions_no0 = gradient_directions_no0
         self.b_values_no0 = b_values_no0
@@ -48,15 +48,15 @@ class Net_GMM(nn.Module):
                 raise NotImplementedError
 
         self.encoder = nn.Sequential(*self.fc_layers,
-                                     nn.Linear(len(b_values_no0), self.sample_no)
+                                     nn.Linear(len(b_values_no0), self.latent_dim)
                                      )
 
-        self.mu = nn.Linear(self.sample_no+self.mixture_k, self.sample_no)
-        self.logvar = nn.Linear(self.sample_no+self.mixture_k, self.sample_no)
+        self.mu = nn.Linear(self.latent_dim+self.mixture_k, self.latent_dim)
+        self.logvar = nn.Linear(self.latent_dim+self.mixture_k, self.latent_dim)
 
-        self.gaus2params = nn.Linear(self.sample_no, nparams)
+        self.gaus2params = nn.Linear(self.latent_dim, nparams)
 
-        self.cat = nn.Linear(self.sample_no, self.mixture_k)
+        self.cat = nn.Linear(self.latent_dim, self.mixture_k)
 
     def forward(self, X):
         '''
